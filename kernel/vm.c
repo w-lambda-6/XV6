@@ -61,7 +61,7 @@ kvminit(void)
 void
 kvminithart()
 {
-  w_satp(MAKE_SATP(kernel_pagetable));
+  w_satp(MAKE_SATP(kernel_pagetable)); //writing to satp to enable the mmu to use the page table
   sfence_vma();
 }
 
