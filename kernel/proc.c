@@ -127,6 +127,14 @@ found:
     return 0;
   }
 
+  //Allocate a USYSCALL page.
+  if (j(p->usyscall = (struct usyscall*)kalloc()) == 0){
+    freeproc(p->usyscall);
+    release(&p->lock);
+    return 0;
+  }
+  p->usyscall->pid = p->pid;  //putting the pid in, for easier pid look-up
+
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
   if(p->pagetable == 0){
@@ -196,6 +204,15 @@ proc_pagetable(struct proc *p)
     return 0;
   }
 
+  // map the shared syscall page below TRAPFRAME
+  if (mappages(pagetable, USYSCALL, PGSIZE, (uint64)(p->usyscall), PTE_R|PTE_U) < 0){
+    // after mapping, visiting the page starting with USYSCALL, we will vist p->usyscall
+    unvmunmap(pagetable, TRAMPOLINE, 1, 0);
+    unvmunmap(pagetable, TRAPFRAME, 1, 0);
+    unvmfree(pagetable, 0);
+    return 0;
+  }
+
   return pagetable;
 }
 
@@ -204,6 +221,7 @@ proc_pagetable(struct proc *p)
 void
 proc_freepagetable(pagetable_t pagetable, uint64 sz)
 {
+  uvmunmap(pagetable, USYSCALL, 1, 0); //Newly added user-kernel shared page for speeding up syscalls
   uvmunmap(pagetable, TRAMPOLINE, 1, 0);
   uvmunmap(pagetable, TRAPFRAME, 1, 0);
   uvmfree(pagetable, sz);

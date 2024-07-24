@@ -432,3 +432,27 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
     return -1;
   }
 }
+
+
+// takes in a single page table as argument
+// prints out the page table in a certain format
+// as the page table is essentially a tree
+// we use dfs to do it
+void
+vmprint(pagetable_t pagetable, uint dep){
+  if (dep == 0)
+    printf("page table %p\n", pagetable);
+  for (int i = 0 ; i < 512; i++){
+    pte_t pte = pagetable[i];
+    if (pte & PTE_V){
+      for (int j = 0; j < dep; j++)
+        printf("..");
+      uint64 child = PTE2PA(pte);
+      printf("..%d: pte %p pa %p\n", i, pte, child);
+
+      //stop recursing if we are at leaf node
+      if (dep < 2)
+        vmprint((pagetable_t) child, dep+1);
+    }
+  }
+}

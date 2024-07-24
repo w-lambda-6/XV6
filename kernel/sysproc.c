@@ -107,3 +107,36 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+// system call that reports which pages have been accessed
+// takes in the first page to be checked (base)
+// the number of pages to be checked and
+// the mask for recording the results of the accesses
+int
+sys_pgaccess(void){
+  //using arg functions to get parameters from users
+  pagetable_t u_pt = myproc()->pagetable;
+  uint64 fir_addr, mask_addr;
+  uint ck_siz;
+  // corresponds to the 3 parameters
+  uint mask = 0;
+  try(argaddr(0, &fir_addr), return -1);
+  try(argint(1, &ck_siz), return -1);
+  try(argaddr(2, &mask_addr), return -1);
+
+  if (ck_siz > 32)  // mask not big enough to store
+    return -1;
+
+  pte_t* fir_pte = walk(u_pt, fir_addr, 0);
+
+  // getting the mask of the ck_siz ptes after the first address
+  for(int i = 0; i < ck_siz; i++){
+    if((fir_pte[i] & PTE_A) && (fir_pte[i] & PTE_V)){
+      mask |= (1<<i);
+      fir_pte[i] ^= PTE_A;  // reset the access bit to 0
+    }
+  }
+
+  // passing the mask to the user side
+  try(copyout(u_pt, (uint*)mask_addr, &mask, sizeof(uint)), return -1);
+}
