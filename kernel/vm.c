@@ -159,6 +159,13 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
   return 0;
 }
 
+void
+refcnt_inc(void* pa){
+  acquire(&refcnt_lock);
+  PG_REFCNT(pa)++;
+  release(&refcnt_lock);
+}
+
 // Remove npages of mappings starting from va. va must be
 // page-aligned. The mappings must exist.
 // Optionally free the physical memory.
@@ -311,14 +318,23 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
+
+    *pte &= (~PTE_W);   // clears PTE_W
+    *pte |= PTE_C;      // opening up permissions for PTE_C, representing a COW page
     flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
-      goto err;
-    memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
+
+    // these parts allocate memory, so need to be removed
+    //if((mem = kalloc()) == 0)
+    //  goto err;
+    //memmove(mem, (char*)pa, PGSIZE);
+    if(mappages(new, i, PGSIZE, (uint64)pa, flags) != 0){
+      // instead of mapping new VA to new allocated PA
+      // mem, we map it directly to the PA of the parent process
+      printf("uvmcopy failed\n");
       kfree(mem);
       goto err;
     }
+    refcnt_inc(pa);
   }
   return 0;
 
@@ -350,6 +366,14 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
+
+    // cowalloc() must be before walkaddr()
+    // if we call walkaddr() before cowalloc
+    // the PA we found is actually the shared 
+    // page of the parent process
+    if (uncopied_cow(pagetable, va0)){
+      try(cowalloc(pagetable, va0), return -1);
+    }
     pa0 = walkaddr(pagetable, va0);
     if(pa0 == 0)
       return -1;
@@ -431,4 +455,21 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+}
+
+
+// function that tells if a page is an **unallocated COW page**
+int 
+uncopied_cow(pagetable_t pgtbl, uint64 va)
+{
+  if (va >= MAXVA)
+    return 0;
+  pte_t* pte = walk(pgtbl, va, 0);
+  if (pte == 0)   // page doesn't exist
+    return 0;
+  if ((*pte & PTE_V) == 0)
+    return 0;
+  if ((*pte & PTE_U) == 0)
+    return 0;
+  return ((*pte) & PTE_C);  // having PTE_C means that this COW page hasn't been allocated yet
 }
