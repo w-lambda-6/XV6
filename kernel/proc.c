@@ -127,6 +127,13 @@ found:
     return 0;
   }
 
+  // Allocate a alarmframe page.
+  if ((p->alarmframe = (struct trapframe *)kalloc()) == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
   if(p->pagetable == 0){
@@ -140,7 +147,11 @@ found:
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
-
+  // used for the sigalarm syscall
+  p->alarm_handler = 0;
+  p->alarm_tk_elapsed = 0;
+  p->alarm_tks = 0;
+  p->alarm_state = 0;
   return p;
 }
 
@@ -155,6 +166,14 @@ freeproc(struct proc *p)
   p->trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+  if(p->alarmframe)
+    kfree((void*)p->alarmframe);
+  p->alarmframe = 0;
+  p->alarm_handler = 0;
+  p->alarm_tk_elapsed = 0;
+  p->alarm_tks = 0;
+  p->alarm_state = 0;
+
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;

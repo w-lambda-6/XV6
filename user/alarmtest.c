@@ -140,6 +140,13 @@ test2()
   }
 }
 
+// handler runs very slowly,
+// specified clock cycle has passed
+// since the last call to the handler,
+// but the handler has not yet finished executing,
+// at this time if we change the epc again
+// the handler starts executing from the beginning again
+// big problem !!!
 void
 slow_handler()
 {
@@ -149,7 +156,7 @@ slow_handler()
     printf("test2 failed: alarm handler called more than once\n");
     exit(1);
   }
-  for (int i = 0; i < 1000*500000; i++) {
+  for (int i = 0; i < 1000*500000; i++) { // super slow handler
     asm volatile("nop"); // avoid compiler optimizing away loop
   }
   sigalarm(0, 0);

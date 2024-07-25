@@ -331,6 +331,23 @@ sfence_vma()
   asm volatile("sfence.vma zero, zero");
 }
 
+// called by backtrace to read the current frame pointer
+/*
+Basic Format of GCC extended inline assembly:
+asm asm-qualifiers (AssemblerTemplate
+                  : OutputOperands
+                  [ : Input Operands
+                  [ : Clobbers  ] ])
+*/
+static inline uint64
+r_fp()
+{
+  uint64 x;
+  asm volatile("mv %0, s0" : "=r" (x)); // volatile meaning we don't want gcc to optimise this assembly
+                                        // the value in %0 will be replaced with "=r" (x)
+  return x;
+}
+
 
 #define PGSIZE 4096 // bytes per page
 #define PGSHIFT 12  // bits of offset within a page

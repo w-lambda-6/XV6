@@ -77,8 +77,23 @@ usertrap(void)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
+  if(which_dev == 2){
+    if (p->alarm_tks > 0){
+      // time passed between the last time handler code has been executed
+      p->alarm_tk_elapsed++;
+      // if exceeded the specified time limit, and NOT RUNNING !!!
+      if (p->alarm_tk_elapsed > p->alarm_tks && !p->alarm_state){ 
+        p->alarm_tk_elapsed = 0;
+        // we need to back up all the registers before executing the alarm handler
+        *p->alarmframe = *p->trapframe; 
+        // changing epc directly so that returning back to the user side will execute code with address epc
+        p->trapframe->epc = p->alarm_handler; 
+        // notice that after changing the epc, it means that the alarm handler is executing
+        p->alarm_state = 1; 
+      }
+    }
     yield();
+  }
 
   usertrapret();
 }

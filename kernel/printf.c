@@ -132,3 +132,18 @@ printfinit(void)
   initlock(&pr.lock, "pr");
   pr.locking = 1;
 }
+
+void
+backtrace()
+{
+  printf("in bt\n");
+  // below the frame pointer is the return address
+  // below this is the frame pointer for the previous stack frame
+  uint64* cur_frame = (uint64*)r_fp();
+  uint64* top = PGROUNDUP((uint64)cur_frame);
+  uint64* bot = PGROUNDDOWN((uint64)cur_frame);
+  while(cur_frame < top && cur_frame > bot){
+    printf("%p\n", cur_frame[-1]); // print the current return address
+    cur_frame = cur_frame[-2];     // change current stack frame to previous stack frame
+  }
+}
