@@ -11,9 +11,32 @@
 #define MAX_THREAD  4
 
 
+// create a context structure for the thread to use
+struct Context{
+  uint64 ra;
+  uint64 sp;
+
+  // callee-saved
+  uint64 s0;
+  uint64 s1;
+  uint64 s2;
+  uint64 s3;
+  uint64 s4;
+  uint64 s5;
+  uint64 s6;
+  uint64 s7;
+  uint64 s8;
+  uint64 s9;
+  uint64 s10;
+  uint64 s11;
+};
+
+
+
 struct thread {
   char       stack[STACK_SIZE]; /* the thread's stack */
   int        state;             /* FREE, RUNNING, RUNNABLE */
+  struct Context ctx;
 };
 struct thread all_thread[MAX_THREAD];
 struct thread *current_thread;
@@ -41,7 +64,7 @@ thread_schedule(void)
   t = current_thread + 1;
   for(int i = 0; i < MAX_THREAD; i++){
     if(t >= all_thread + MAX_THREAD)
-      t = all_thread;
+      t = all_thread;    // loop back
     if(t->state == RUNNABLE) {
       next_thread = t;
       break;
@@ -57,11 +80,13 @@ thread_schedule(void)
   if (current_thread != next_thread) {         /* switch threads?  */
     next_thread->state = RUNNING;
     t = current_thread;
-    current_thread = next_thread;
+    current_thread = next_thread;   // current process is the next process now
+    // then use t to swap current and next
     /* YOUR CODE HERE
      * Invoke thread_switch to switch from t to next_thread:
      * thread_switch(??, ??);
      */
+    thread_switch((uint64) &t->ctx, (uint64) &next_thread->ctx);
   } else
     next_thread = 0;
 }
@@ -76,6 +101,10 @@ thread_create(void (*func)())
   }
   t->state = RUNNABLE;
   // YOUR CODE HERE
+  // only need to care about how to set registers ra and sp
+  // as usr process doesn't use registers at the beginning
+  t->ctx.ra = (uint64) func;  // because after calling this, if we call thread_schedule(), first statement of thread function should be executed
+  t->ctx.sp = (uint64) &t->stack + (STACK_SIZE - 1);      // setting the stack pointer to the highest address as stack grows from hi to lo
 }
 
 void 

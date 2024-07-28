@@ -8,9 +8,9 @@ static int nthread = 1;
 static int round = 0;
 
 struct barrier {
-  pthread_mutex_t barrier_mutex;
+  pthread_mutex_t barrier_mutex;  // the lock protecting nthread
   pthread_cond_t barrier_cond;
-  int nthread;      // Number of threads that have reached this round of the barrier
+  int nthread;   // Number of threads that have reached this round of the barrier
   int round;     // Barrier round
 } bstate;
 
@@ -30,7 +30,20 @@ barrier()
   // Block until all threads have called barrier() and
   // then increment bstate.round.
   //
-  
+  pthread_mutex_lock(&bstate.barrier_mutex);
+  bstate.nthread++;
+  if (bstate.nthread < nthread){
+    pthread_cond_wait(&bstate.barrier_cond, &bstate.barrier_mutex);
+    // if not all threads have arrived at barrier, then wait
+    // before receiving signal broadcast, this is blocked
+  }else{
+    // if this is the last process
+    bstate.nthread = 0;
+    bstate.round++;
+    // different from pthread_cond_signal() which only wakes up one process
+    pthread_cond_broadcast(&bstate.barrier_cond);
+  }
+  pthread_mutex_unlock(&bstate.barrier_mutex);
 }
 
 static void *

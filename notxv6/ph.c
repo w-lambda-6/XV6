@@ -1,3 +1,12 @@
+// ht is here is pretty standard, fixed sized array with external chaining
+
+// to make this able to be run on a multi-threaded system
+// we create a mutex for each linked list in the ht
+// then lock and unlock it at the beginning and end of put() and get()
+
+// we can't add a lock in insert() because it is called by put(), which will cause deadlocks
+
+
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -36,11 +45,17 @@ insert(int key, int value, struct entry **p, struct entry *n)
   *p = e;
 }
 
+
+// creating the locks
+pthread_mutex_t bkt_lock[NBUCKET];
+
 static 
 void put(int key, int value)
 {
   int i = key % NBUCKET;
 
+  // acquires the lock
+  pthread_mutex_lock(&bkt_lock[i]);
   // is the key already present?
   struct entry *e = 0;
   for (e = table[i]; e != 0; e = e->next) {
@@ -52,9 +67,12 @@ void put(int key, int value)
     e->value = value;
   } else {
     // the new is new.
+    // insert a new key-value pair at the start of table[i]
     insert(key, value, &table[i], table[i]);
   }
 
+  // releases the lock
+  pthread_mutex_unlock(&bkt_lock[i]);
 }
 
 static struct entry*
@@ -62,12 +80,16 @@ get(int key)
 {
   int i = key % NBUCKET;
 
+  // acquiring the lock
+  pthread_mutex_lock(&bkt_lock[i]);
 
   struct entry *e = 0;
   for (e = table[i]; e != 0; e = e->next) {
     if (e->key == key) break;
   }
-
+  
+  // releasing the lock
+  pthread_mutex_unlock(&bkt_lock[i]);
   return e;
 }
 
