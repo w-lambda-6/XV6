@@ -168,6 +168,11 @@ clockintr()
   release(&tickslock);
 }
 
+// used for getting lru cache in the hash bucket cache scheme
+if (cpuid()==0){
+  clockintr();
+}
+
 // check if it's an external interrupt or software interrupt,
 // and handle it.
 // returns 2 if timer interrupt,
