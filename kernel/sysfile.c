@@ -297,6 +297,34 @@ sys_open(void)
 
   begin_op();
 
+  if(!(omode & O_NOFOLLOW)){
+    int rec_left = 10;
+    struct inode* next_file;
+    while (rec_left && ip->type == T_SYMLINK){
+
+      if (readi(ip, 0, path, 0, MAXPATH) == 0){
+        iunlockput(ip);
+        end_op();
+        return -1;
+      }
+
+      if((next_file = namei(path)) == 0){
+        iunlockput(ip);
+        end_op();
+        return -1;
+      }
+      iunlockput(ip);
+      ip = next_file;
+      rec_left--;
+      ilock(ip);
+    }
+    if (rec_left <= 0) {
+      iunlockput(ip);
+      end_op();
+      return -1;
+    }
+  }
+
   if(omode & O_CREATE){
     ip = create(path, T_FILE, 0, 0);
     if(ip == 0){

@@ -6,6 +6,7 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "stat.h"
 
 uint64
 sys_exit(void)
@@ -94,4 +95,30 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+
+uint64 
+sys_symlink(void)
+{
+  char tar_path[MAXPATH], path[MAXPATH];
+  try(argstr(0, tar_path, MAXPATH), return -1);
+  try(argstr(1, path, MAXPATH), return -1);
+  struct inode* ip;
+
+
+
+  begin_op();
+  ip = create(path, T_SYMLINK, 0, 0);
+
+  if (ip == 0){
+    end_op();
+    return -1;
+  }
+  try(writei(ip, 0, tar_path, 0, strlen(tar_path)), end_op(); return -1);
+
+  iunlockput(ip);
+
+  end_op();
+  return 0;
 }
