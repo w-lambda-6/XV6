@@ -95,3 +95,49 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64
+sys_mmap(){
+  uint64 addr, length, offset;
+  int prot, flags, fd;
+  struct file* file;
+
+  try(argaddr(0, &addr), return -1)
+  try(argaddr(1, &length), return -1)
+  try(argint(2, &prot), return -1)
+  try(argint(3, &flags), return -1)
+  try(argfd(4, &fd, &file), return -1)
+  try(argaddr(5, &offset), return -1)
+
+  struct proc* p = myproc();
+  if (addr || offset)
+    return -1;
+  if (!file->writable && (prot & PROT_WRITE) && (flags & MAP_SHARED))
+    return -1;
+
+  int unuse_idx = -1;
+  uint64 sta_addr = get_mmap_space(length, p->mmap_vmas, &unuse_idx);
+
+  if (unuse_idx == -1)
+    return -1;
+  if (sta_addr <= p->sz)  // mmap if there if there is no more memory left
+    return -1;
+  struct mmap_vma* cur_vma = &p->mmap_vmas[unuse_idx];
+  cur_vma->file = file;
+  cur_vma->in_use = 1;
+  cur_vma->prot = prot;
+  cur_vma->flags = flags;
+  cur_vma->sta_addr = sta_addr;
+  cur_vma->sz = length;
+  filedup(file);          // increase the reference count
+  return cur_vma->sta_addr; 
+}
+
+uint64 
+sys_munmap(){
+  uint64 addr;
+  uint64 len;
+  try(argaddr(0, &addr), return -1);
+  try(argaddr(1, &len), return -1);
+  return munmap(addr, len);
+}

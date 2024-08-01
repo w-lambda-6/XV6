@@ -81,6 +81,7 @@ struct trapframe {
 };
 
 enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
+#define VMA_SZ 16
 
 // Per-process state
 struct proc {
@@ -105,4 +106,16 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+
+  struct mmap_vma mmap_vmas[VMA_SZ];
+};
+
+struct 
+mmap_vma{
+  int in_use;       // whether it's representing a in-use file mapping
+  uint64 sta_addr;  // starting address
+  uint64 sz;        // size of the mapped memory
+  int prot;
+  struct file* file;// name of the mapped file
+  int flags;        // map_shared or map_private
 };

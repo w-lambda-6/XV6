@@ -484,3 +484,33 @@ sys_pipe(void)
   }
   return 0;
 }
+
+// in sysfile.c
+uint64
+munmap(uint64 addr, uint64 len){
+  struct proc* p = myproc();
+  struct mmap_vma* cur_vma = get_vma_by_addr(addr);
+  if(!cur_vma){
+    return -1;
+  }
+
+  if (addr > cur_vma->sta_addr && addr + len < cur_vma->sta_addr + cur_vma->sz){
+    // digging holes from the middle
+    return -1;
+  }
+
+  mmap_writeback(p->pagetable, addr, len, cur_vma);
+
+  if (addr == cur_vma->sta_addr){
+    // delete from the starting position
+    cur_vma->sta_addr += len;
+  }
+  cur_vma->sz -= len;
+
+  if (cur_vma->sz <= 0){
+    // if the whole mapped region is gone
+    fileclose(cur_vma->file);
+    cur_vma->in_use = 0;
+  }
+  return 0;
+}

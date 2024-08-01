@@ -67,9 +67,15 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+  } else if((r_scause() == 13 || r_scause() == 15)) {
+    try(mmap_fault_handler(r_stval()), bad = 1);
   } else {
+    bad = 1;
+  }
+
+  if (bad){
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
-    printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+    printf("            spe=%p stval=%p\n", r_spec(), r_stval());
     p->killed = 1;
   }
 
@@ -216,5 +222,70 @@ devintr()
   } else {
     return 0;
   }
+}
+
+int
+mmap_fault_handler(uint64 addr){
+  struct proc* p = myproc();
+  struct mmap_vma* cur_vma;
+  if((cur_vma = get_vma_by_addr(addr)) == 0){
+    // find which mapping of a file this address belongs to
+    // if it is equal to 0 then it doesn't belong to any
+    return -1;
+  }
+
+  if (!cur_vma->file->readable && r_scause() == 13 && cur_vma->flags & MAP_SHARED){
+    DEBUG("mmap_fault_handler: not readable\n");
+    return -1;
+  } // read error
+
+  if (!cur_vma->file->writable && r_scause() == 15 && cur_vma->flags & MAP_SHARED){
+    DEBUG("mmap_fault_handler: not writable\n");
+    return -1;
+  } // write error
+
+
+  uint64 pg_sta = PGROUNDDOWN(addr);
+  uint64 pa = kalloc();
+  if(!pa){
+    DEBUG("mmap_fault_handler: kalloc failed\n");
+    return -1;
+  }
+
+  memset(pa, 0, PGSIZE);
+
+  int perm = PTE_U | PTE_V;
+  if(cur_vma->prot & PROT_READ) perm |= PTE_R;
+  if(cur_vma->prot & PROT_WRITE) perm |= PTE_W;
+  if(cur_vma->prot & PROT_EXEC) perm |= PTE_X;
+
+  uint64 off = PGROUNDDOWN(addr - cur_vma->sta_addr);
+  // the off here means how many pages we will skip when copying a file
+
+  ilock(cur_vma->file->ip);
+  int rdret;
+  if((rdret = readi(cur_vma->file->ip, 0, pa, off, PGSIZE)) == 0){
+    iunlock(cur_vma->file->ip);
+    return -1;
+  }
+
+  // Didn't put because the file will still be used
+  // can put in unmap
+  iunlock(cur_vma->file->ip);
+
+  mappages(p->pagetable, pg_sta, PGSIZE, pa, perm);
+  return 0;
+}
+
+struct mmap_vma*
+get_vma_by_addr(uint64 addr){
+  struct proc* p = myproc();
+  for (int i = 0; i < VMA_SZ; i++){
+    if (p->mmap_vmas[i].in_use && addr >= p->mmap_vmas[i].sta_addr && addr < p->mmap_vmas[i].sta_addr + p->mmap_vmas[i].sz){
+      // to tell if this address is in the middle of the memory mapped region of the file
+      return p->mmap_vmas + i;
+    }
+  }
+  return 0;
 }
 

@@ -295,6 +295,14 @@ fork(void)
   // Cause fork to return 0 in the child.
   np->trapframe->a0 = 0;
 
+  // copy vma to child process
+  for (int i = 0; i < VMA_SZ; i++){
+    if(p->mmap_vmas[i].in_use){
+      np->mmap_vmas[i] = p->mmap_vmas[i];
+      filedup(p->mmap_vmas[i].file);
+    }
+  }
+
   // increment reference counts on open file descriptors.
   for(i = 0; i < NOFILE; i++)
     if(p->ofile[i])
@@ -343,6 +351,13 @@ exit(int status)
 
   if(p == initproc)
     panic("init exiting");
+
+  // release and writing back mmap data is before closing the file
+  for (int i = 0; i < VMA_SZ; i++){
+    if (p->mmap_vmas[i].in_use){
+      try(munmap(p->mmap_vmas[i].sta_addr, p->mmap_vmas[i].sz), panic("exit: munmap"));
+    }
+  }
 
   // Close all open files.
   for(int fd = 0; fd < NOFILE; fd++){
